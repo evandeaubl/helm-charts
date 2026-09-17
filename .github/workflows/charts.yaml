@@ -1,0 +1,126 @@
+name: Lint, Package & Push Charts
+
+on:
+  push:
+    paths:
+      - 'charts/**'
+
+jobs:
+  charts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Determine changed charts
+        id: changed
+        run: |
+          # Get the commit that triggered this push (last commit on the branch)
+          COMMIT="${{ github.sha }}"
+
+          # Get the base commit to compare against (previous tip of the branch).
+          # For the first push on a branch, github.event.before is all zeros
+          # (or empty), in which case every chart is considered changed.
+          BASE_REF="${{ github.event.before }}"
+
+          find * -name Chart.yaml -print0 | xargs -0 dirname | while read -r chart; do
+            if [ -f "$chart/.no_publish" ]; then
+              continue
+            fi
+
+            if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
+              echo "$chart"
+            else
+              if [ -n "$chart" ] && [ -d "$chart" ] && ! git diff --quiet "$BASE_REF" "$COMMIT" -- "$chart"; then
+                echo "$chart"
+              fi
+            fi
+          done | sort -u > /tmp/changed_charts.txt
+
+          if [ ! -s /tmp/changed_charts.txt ]; then
+            echo "No charts changed."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changed charts: $(cat /tmp/changed_charts.txt | tr '\n' ' ')"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Lint changed charts
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          while read -r chart; do
+            [ -z "$chart" ] && continue
+            echo ""
+            echo "=========================================="
+            echo "Processing chart: $chart"
+            echo "=========================================="
+
+            # Lint the chart
+            echo ">>> Linting $chart..."
+            helm lint "$chart"
+            lint_exit=$?
+            if [ $lint_exit -ne 0 ]; then
+              echo "::error::Lint failed for chart: $chart"
+              exit 1
+            fi
+
+            echo ">>> Done: $chart"
+          done < /tmp/changed_charts.txt
+
+      - name: Package & push changed charts
+        if: |
+          steps.changed.outputs.changed == 'true' &&
+          github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo ">>> Logging into Docker Hub (docker.io)..."
+          echo "$DOCKERHUB_TOKEN" | helm registry login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+
+          mkdir -p /tmp/charts-output
+          while read -r chart; do
+            [ -z "$chart" ] && continue
+            echo ""
+            echo "=========================================="
+            echo "Processing chart: $chart"
+            echo "=========================================="
+
+            # Package the chart
+            echo ">>> Packaging $chart..."
+            helm package "$chart" --destination /tmp/charts-output
+            package_exit=$?
+            if [ $package_exit -ne 0 ]; then
+              echo "::error::Packaging failed for chart: $chart"
+              exit 1
+            fi
+
+            chart_name=$(basename "$chart")
+            # Find the packaged .tgz file
+            tgz_file=$(ls /tmp/charts-output/"$chart_name"-*.tgz 2>/dev/null | head -1)
+            if [ -z "$tgz_file" ]; then
+              echo "::error::Packaged file not found for chart: $chart"
+              exit 1
+            fi
+
+            # Push to Docker Hub as an OCI artifact. helm derives the
+            # repository name and tag from the chart name and version, so a
+            # chart named gocuts-chart at 1.2.3 lands at
+            # docker.io/evandeaubl/gocuts-chart:1.2.3.
+            echo ">>> Pushing $chart to Docker Hub (evandeaubl/${chart_name})..."
+            helm push "$tgz_file" oci://docker.io/evandeaubl
+            push_exit=$?
+            if [ $push_exit -ne 0 ]; then
+              echo "::error::Push failed for chart: $chart"
+              exit 1
+            fi
+
+            echo ">>> Done: $chart"
+          done < /tmp/changed_charts.txt
