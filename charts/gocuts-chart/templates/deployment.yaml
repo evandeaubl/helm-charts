@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "gocuts.fullname" . }}
+  name: {{ include "gocuts-chart.fullname" . }}
   labels:
-    {{- include "gocuts.labels" . | nindent 4 }}
+    {{- include "gocuts-chart.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "gocuts.selectorLabels" . | nindent 6 }}
+      {{- include "gocuts-chart.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -20,7 +20,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "gocuts.selectorLabels" . | nindent 8 }}
+        {{- include "gocuts-chart.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -29,7 +29,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "gocuts.serviceAccountName" . }}
+      serviceAccountName: {{ include "gocuts-chart.serviceAccountName" . }}
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -67,7 +67,7 @@ spec:
             - name: GOCUTS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "gocuts.fullname" . }}
+                  name: {{ include "gocuts-chart.fullname" . }}
                   key: key
             {{- end }}
           ports:
@@ -94,6 +94,6 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: {{ include "gocuts.fullname" . }}-config
+            name: {{ include "gocuts-chart.fullname" . }}-config
         - name: tmp
           emptyDir: {}

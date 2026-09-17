@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {{ include "gocuts.fullname" . }}-test-connection
+  name: {{ include "gocuts-chart.fullname" . }}-test-connection
   labels:
-    {{- include "gocuts.labels" . | nindent 4 }}
+    {{- include "gocuts-chart.labels" . | nindent 4 }}
   annotations:
     helm.sh/hook: test
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
@@ -19,4 +19,4 @@ spec:
           # Fetch the home page over the Service. When key auth is enabled the
           # key query parameter is required, so include it from the same value
           # the Secret was created with.
-          wget -qO- -T 5 "http://{{ include "gocuts.fullname" . }}:{{ .Values.service.port }}/{{ if .Values.key }}?key={{ .Values.key | urlquery }}{{ end }}" | grep -q "<html"
+          wget -qO- -T 5 "http://{{ include "gocuts-chart.fullname" . }}:{{ .Values.service.port }}/{{ if .Values.key }}?key={{ .Values.key | urlquery }}{{ end }}" | grep -q "<html"
