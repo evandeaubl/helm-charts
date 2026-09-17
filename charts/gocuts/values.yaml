@@ -1,0 +1,90 @@
+# Default values for the gocuts chart.
+
+replicaCount: 1
+
+image:
+  # gocuts container image, published to Docker Hub by the gocuts project.
+  repository: evandeaubl/gocuts
+  # Tag to pull; defaults to the chart's appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Create a dedicated ServiceAccount for the workload.
+  create: true
+  annotations: {}
+  # Name of the ServiceAccount to use; defaults to the release fullname.
+  name: ""
+
+service:
+  # ClusterIP service exposing the gocuts server.
+  type: ClusterIP
+  # Port the Service exposes.
+  port: 8080
+
+# Port the gocuts process listens on inside the container (via GOCUTS_ADDR).
+# Keep it above 1024 since the container runs as non-root.
+containerPort: 8080
+
+ingress:
+  # Optional Ingress; disabled by default.
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: gocuts.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+
+podAnnotations: {}
+podLabels: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Application settings exposed as environment variables
+# (see the gocuts README for details).
+settings:
+  # Serve /suggest and advertise it in opensearch.xml (GOCUTS_SUGGEST).
+  suggest: true
+  # List shortcuts on the home page and error pages (GOCUTS_LIST).
+  list: true
+  # External base URL used in OpenSearch templates (GOCUTS_BASE_URL).
+  # Leave empty to derive it from each request.
+  baseUrl: ""
+
+# Access key for private deployments. When set, it is stored in a Secret and
+# injected into the Deployment as the GOCUTS_KEY environment variable, which
+# makes gocuts require a matching `key` query parameter on all routes.
+# Leave empty to disable key auth. Prefer passing this with --set or -f.
+key: ""
+
+config:
+  # Path inside the container where the TOML config file is mounted
+  # (also set as GOCUTS_CONFIG).
+  mountPath: /gocuts.toml
+  # Literal gocuts TOML configuration rendered into a ConfigMap and mounted
+  # at config.mountPath. Shortcut entries are `gocuts.NAME.url = "..."`.
+  toml: |
+    gocuts.gmail.url = "https://mail.google.com"
+    gocuts.gcal.url = "https://calendar.google.com"
+    gocuts.drive.url = "https://drive.google.com"
+    gocuts.maps.url = "https://maps.google.com"
+    gocuts.gh.url = "https://github.com"
+    gocuts.hn.url = "https://news.ycombinator.com"
+
+    [gocuts.docs]
+    url = "https://docs.google.com"
+
+# Extra command-line arguments appended after the image entrypoint,
+# e.g. ["-list=false"].
+extraArgs: []
